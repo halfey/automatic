@@ -17,12 +17,19 @@ samplers_for_img2img = all_samplers
 samplers_map = {}
 
 
-def create_sampler(name, model):
-    if name is not None:
+def find_sampler_config(name):
+    if name is not None and name != 'None':
         config = all_samplers_map.get(name, None)
     else:
         config = all_samplers[0]
-    assert config is not None, f'bad sampler name: {name}'
+    return config
+
+
+def create_sampler(name, model):
+    config = find_sampler_config(name)
+    if config is None:
+        shared.log.error(f'Attempting to use unknown sampler: {name}')
+        config = all_samplers[0]
     if backend == Backend.ORIGINAL:
         sampler = config.constructor(model)
         sampler.config = config

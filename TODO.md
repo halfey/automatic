@@ -11,10 +11,12 @@ Stuff to be added...
 
 - Update `Wiki`
 - Create new `GitHub` hooks/actions for CI/CD  
-- Reload browser on server restart
 - Import core repos
-- Improve core `Stability-AI` code: <https://github.com/vladmandic/automatic/discussions/795>
-- Improve core `k-Diffusion` code
+- Update `train.py` to use `interrogator`
+- Update `train.py` to use `rembg`
+- Create new train UI
+- Create new Models UI
+- Intelligent preview mode
 
 ## Investigate
 
@@ -24,14 +26,7 @@ Stuff to be investigated...
 
 Pick & merge PRs from main repo...
 
-- Compare commits: <https://github.com/vladmandic/automatic/compare/e59ebe25..b6289d5>
-
-## Models
-
-StabilityAI is working on new stuff...
-
-- SD XL
-- SD ReImagined
+- list: <https://github.com/AUTOMATIC1111/stable-diffusion-webui/compare/89f9faa...baf6946>
 
 ## Integration
 
@@ -43,9 +38,24 @@ Tech that can be integrated as part of the core workflow...
 - [Custom diffusion](https://github.com/guaneec/custom-diffusion-webui), [Custom diffusion](https://www.cs.cmu.edu/~custom-diffusion/)
 - [Dream artist](https://github.com/7eu7d7/DreamArtist-sd-webui-extension)
 - [QuickEmbedding](https://github.com/ethansmith2000/QuickEmbedding)
+- [DataComp CLiP](https://github.com/mlfoundations/open_clip/blob/main/docs/datacomp_models.md)
+- [ClipSeg](https://github.com/timojl/clipseg)
+- [DragGAN](https://github.com/XingangPan/DragGAN)
 - `TensorRT`
 
 ## Random
 
 - Bunch of stuff: <https://pharmapsychotic.com/tools.html>
-- <https://github.com/AUTOMATIC1111/stable-diffusion-webui/compare/89f9faa...20ae71f>
+- <https://towardsdatascience.com/mastering-memoization-in-python-dcdd8b435189>
+- shared.info
+- docker
+- port `p.all_hr_prompts`
+- test `lyco_patch_lora`
+- fix `lyco` logging
+- string template to exif keywords
+- image watermark
+- image `imagehash` phash and hdash
+- custom exif tags
+- replace lightbox with iv-viewer
+- git-rebasin
+- additional upscalers
