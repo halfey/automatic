@@ -1,5 +1,6 @@
 :root, .dark{ --checkbox-label-gap: 0.25em 0.1em; --section-header-text-size: 12pt; --block-background-fill: transparent;}
 a { font-weight: bold; cursor: pointer; }
+h2 { margin-top: 1em !important; font-size: 1.4em !important; }
 div.gradio-container{ max-width: unset !important; padding: 8px !important; }
 div.tabitem { padding: 0 !important; }
 div.form{ border-width: 0; box-shadow: none; background: transparent; overflow: visible; gap: 0.5em; }
@@ -28,7 +29,7 @@ div.gradio-html.min{ min-height: 0; }
 footer { display: none; }
 
 /* general styled components */
-.gradio-button.tool{ max-width: 2.3em;  min-width: 2.3em !important; height: 2.3em; align-self: end; line-height: 1em; border-radius: 0.5em; }
+.gradio-button.tool{ max-width: 2.3em;  min-width: 2.3em !important; height: 2.3em; align-self: end; line-height: 1em }
 .gradio-button.secondary-down{ background: var(--button-secondary-background-fill); color: var(--button-secondary-text-color); }
 .gradio-button.secondary-down, .gradio-button.secondary-down:hover{ box-shadow: 1px 1px 1px rgba(0,0,0,0.25) inset, 0px 0px 3px rgba(0,0,0,0.15) inset; }
 .gradio-button.secondary-down:hover{ background: var(--button-secondary-background-fill-hover); color: var(--button-secondary-text-color-hover); }
@@ -69,7 +70,6 @@ button.custom-button{
     background: var(--input-background-fill) !important;
     box-shadow: 0 0 0.0 0.3em rgba(192,192,192,0.15), inset 0 0 0.6em rgba(192,192,192,0.075);
     border: 2px solid rgba(192,192,192,0.4) !important;
-    border-radius: 0.4em;
 }
 
 .block.token-counter.error span{
@@ -100,7 +100,8 @@ button.custom-button{
 }
 
 #txt2img_gallery img, #img2img_gallery img, #extras_gallery img { object-fit: scale-down; width: -webkit-fill-available !important; }
-#txt2img_footer, #img2img_footer, #extras_footer{ height: fit-content; display: none; }
+#txt2img_footer, #img2img_footer, #extras_footer { height: fit-content; }
+#txt2img_footer, #img2img_footer { height: fit-content; display: none; }
 #txt2img_generate_box, #img2img_generate_box { gap: 0.5em; flex-wrap: wrap-reverse; }
 #txt2img_actions_column, #img2img_actions_column { gap: 0.5em; }
 #txt2img_generate_box > button, #img2img_generate_box > button { height: 2.2em; line-height: 0; }
@@ -315,7 +316,6 @@ div#extras_scale_to_tab div.form{
     position: relative;
     height: 20px;
     background: #b4c0cc;
-    border-radius: 3px !important;
     margin-bottom: -3px;
 }
 
@@ -332,7 +332,6 @@ div#extras_scale_to_tab div.form{
     line-height: 20px;
     padding: 0 8px 0 0;
     text-align: right;
-    border-radius: 3px;
     overflow: visible;
     white-space: nowrap;
     padding: 0 0.5em;
@@ -390,51 +389,21 @@ div#extras_scale_to_tab div.form{
     width: 100%;
     height: 100%;
     overflow: auto;
-    background-color: rgba(20, 20, 20, 0.95);
+    background-color: rgba(20, 20, 20, 0.75);
+    backdrop-filter: blur(6px);
     user-select: none;
     -webkit-user-select: none;
-    flex-direction: column;
+    flex-direction: row;
 }
 
-.modalControls {
-    display: flex;
-    gap: 1em;
-    padding: 1em;
-    background-color: rgba(0,0,0,0.2);
-    position: absolute;
-    width: fit-content;
-    z-index: 1;
-}
-
-.modalClose {
-    margin-left: auto;
-}
-
-.modalControls span{
-    color: white;
-    font-size: 35px;
-    font-weight: bold;
-    cursor: pointer;
-    width: 1em;
-}
-
-.modalControls span:hover, .modalControls span:focus{
-    color: #999;
-    text-decoration: none;
-}
-
-#lightboxModal > img {
-    display: block;
-    margin: auto;
-    width: auto;
-}
-
-#lightboxModal > img.modalImageFullscreen{
-    object-fit: contain;
-    height: 100%;
-    width: 100%;
-    min-height: 0;
-}
+.modalControls { display: flex; justify-content: space-evenly; background-color: transparent; position: absolute; width: -webkit-fill-available; z-index: 1; }
+.modalControls:hover { background-color: #50505050; }
+.modalControls span { color: white; font-size: 2em; font-weight: bold; cursor: pointer; filter: grayscale(100%); }
+.modalControls span:hover, .modalControls span:focus { color: var(--highlight-color); filter: none; }
+.lightboxModalPreviewZone { display: flex; width: 100%; height: 100%; }
+.lightboxModalPreviewZone:focus-visible { outline: none; }
+.lightboxModalPreviewZone > img { display: block; margin: auto; width: auto; }
+.lightboxModalPreviewZone > img.modalImageFullscreen{ object-fit: contain;  height: 100%; width: 100%; min-height: 0; background: transparent; }
 
 table.settings-value-table{
   background: white;
@@ -451,7 +420,6 @@ table.settings-value-table td{
 
 .modalPrev, .modalNext {
   cursor: pointer;
-  position: absolute;
   top: 0;
   width: auto;
   height: 100vh;
@@ -463,14 +431,12 @@ table.settings-value-table td{
   font-weight: bold;
   font-size: 20px;
   transition: 0.6s ease;
-  border-radius: 0 3px 3px 0;
   user-select: none;
   -webkit-user-select: none;
 }
 
 .modalNext {
   right: 0;
-  border-radius: 3px 0 0 3px;
 }
 
 .modalPrev:hover, .modalNext:hover {
@@ -496,7 +462,6 @@ table.settings-value-table td{
     display:block;
     padding:0px 0;
     border:2px solid #a55000;
-    border-radius:8px;
     box-shadow:1px 1px 2px #CE6400;
     width: 200px;
 }
@@ -533,16 +498,17 @@ table.settings-value-table td{
 .extension-button { font-size: 95% !important; width: 6em; }
 
 /* extra networks */
-.extra-networks > div { margin: 0; border-bottom: none !important; }
-.extra-networks .search { width: 150px; position: absolute; right: 0; height: unset !important; }
-.extra-networks .description { margin-top: 8px; }
-.extra-networks .tab-nav > button { margin-right: 0; height: auto; padding: 2px 4px 2px 4px; }
+.extra-networks > div { margin: 0; gap: 0.2em; border-bottom: none !important; }
+.extra-networks .second-line { display: flex; width: -webkit-fill-available; gap: 0.2em; }
+.extra-networks .search { flex: 1; }
+.extra-networks .description { flex: 3; }
+.extra-networks .tab-nav > button { margin-right: 0; height: 24px; padding: 2px 4px 2px 4px; }
 .extra-networks-tab { padding: 0 !important; }
-.extra-network-subdirs { background: var(--input-background-fill); }
+.extra-network-subdirs { background: var(--input-background-fill); overflow-x: hidden; overflow-y: auto; min-width: 120px; }
 .extra-networks-page { display: flex }
-.extra-networks .custom-button { min-width: 60px; width: 100%; background: none; justify-content: left; padding: 2px 8px 2px 8px; box-shadow: none; }
+.extra-networks .custom-button { width: 120px; width: 100%; background: none; justify-content: left; text-align: left; padding: 2px 8px 2px 16px; text-indent: -8px; box-shadow: none; line-break: auto; }
 .extra-networks .custom-button:hover { background: var(--button-primary-background-fill) }
-.extra-network-cards { display: flex; flex-wrap: wrap; height: 50vh; overflow-y: scroll; overflow-x: hidden; scroll-snap-type: y mandatory; width: -webkit-fill-available; }
+.extra-network-cards { display: flex; flex-wrap: wrap; overflow-y: scroll; overflow-x: hidden; width: -webkit-fill-available; }
 .extra-network-cards .card { height: fit-content; margin: 0.5em; position: relative; scroll-snap-align: start; scroll-margin-top: 0; }
 .extra-network-cards .card .overlay { position: absolute; bottom: 0; padding: 0.2em; z-index: 10; width: 100%; background: none; }
 .extra-network-cards .card:hover .overlay { background: rgba(0, 0, 0, 0.40); }
@@ -586,3 +552,8 @@ div.controlnet_main_options { display: grid; grid-template-columns: 1fr 1fr; gri
 }
 .log-monitor td, .log-monitor th { padding-left: 1em; }
 .logo { background-image: url("logo.png") !important; background-repeat: no-repeat !important; background-position: center !important; background-size: contain !important; }
+
+/* Workaround for Gradio dropdowns capturing clicks during and after fadeout */
+.gradio-dropdown > label > div > div:first-child:not(.showOptions) ~ ul.options {
+  pointer-events: none;
+}

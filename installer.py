@@ -105,6 +105,7 @@ def setup_logging():
     logging.getLogger("httpx").setLevel(logging.ERROR)
     logging.getLogger("ControlNet").handlers = log.handlers
     logging.getLogger("lycoris").handlers = log.handlers
+    # logging.getLogger("DeepSpeed").handlers = log.handlers
 
 
 def print_profile(profile: cProfile.Profile, msg: str):
@@ -177,7 +178,7 @@ def pip(arg: str, ignore: bool = False, quiet: bool = False):
 
 # install package using pip if not already installed
 def install(package, friendly: str = None, ignore: bool = False):
-    if args.reinstall:
+    if args.reinstall or args.upgrade:
         global quick_allowed # pylint: disable=global-statement
         quick_allowed = False
     if args.use_ipex and package == "pytorch_lightning==1.9.4":
@@ -199,6 +200,8 @@ def git(arg: str, folder: str = None, ignore: bool = False):
         txt += ('\n' if len(txt) > 0 else '') + result.stderr.decode(encoding="utf8", errors="ignore")
     txt = txt.strip()
     if result.returncode != 0 and not ignore:
+        if "couldn't find remote ref" in txt: # not a git repo
+            return txt
         global errors # pylint: disable=global-statement
         errors += 1
         log.error(f'Error running git: {folder} / {arg}')
@@ -207,25 +210,34 @@ def git(arg: str, folder: str = None, ignore: bool = False):
         log.debug(f'Git output: {txt}')
     return txt
 
-
-# update switch to main branch as head can get detached and update repository
-def update(folder):
+# switch to main branch as head can get detached
+def branch(folder):
+    if args.experimental:
+        return None
     if not os.path.exists(os.path.join(folder, '.git')):
-        return
-    branch = git('branch', folder)
-    if 'main' in branch:
-        branch = 'main'
-    elif 'master' in branch:
-        branch = 'master'
+        return None
+    b = git('branch', folder)
+    if 'main' in b:
+        b = 'main'
+    elif 'master' in b:
+        b = 'master'
     else:
-        branch = branch.split('\n')[0].replace('*', '').strip()
-    # log.debug(f'Setting branch: {folder} / {branch}')
-    git(f'checkout {branch}', folder)
+        b = b.split('\n')[0].replace('*', '').strip()
+    log.debug(f'Submodule: {folder} / {b}')
+    git(f'checkout {b}', folder, ignore=True)
+    return b
+
+
+# update git repository
+def update(folder, current_branch = False):
+    if current_branch:
+        git('pull --autostash --rebase --force', folder)
+        return
+    b = branch(folder)
     if branch is None:
         git('pull --autostash --rebase --force', folder)
     else:
-        git(f'pull origin {branch} --autostash --rebase --force', folder)
-    # branch = git('branch', folder)
+        git(f'pull origin {b} --autostash --rebase --force', folder)
 
 
 # clone git repository
@@ -273,6 +285,8 @@ def check_python():
 def check_torch():
     if args.quick:
         return
+    if args.skip_torch:
+        log.info('Skipping Torch tests')
     if args.profile:
         pr = cProfile.Profile()
         pr.enable()
@@ -283,6 +297,7 @@ def check_torch():
     log.debug(f'Torch overrides: cuda={args.use_cuda} rocm={args.use_rocm} ipex={args.use_ipex} diml={args.use_directml}')
     log.debug(f'Torch allowed: cuda={allow_cuda} rocm={allow_rocm} ipex={allow_ipex} diml={allow_directml}')
     torch_command = os.environ.get('TORCH_COMMAND', '')
+    xformers_package = os.environ.get('XFORMERS_PACKAGE', 'none')
     if torch_command != '':
         pass
     elif allow_cuda and (shutil.which('nvidia-smi') is not None or os.path.exists(os.path.join(os.environ.get('SystemRoot') or r'C:\Windows', 'System32', 'nvidia-smi.exe'))):
@@ -295,10 +310,14 @@ def check_torch():
         os.environ.setdefault('PYTORCH_HIP_ALLOC_CONF', 'garbage_collection_threshold:0.8,max_split_size_mb:512')
         torch_command = os.environ.get('TORCH_COMMAND', 'torch==2.0.1 torchvision==0.15.2 --index-url https://download.pytorch.org/whl/rocm5.4.2')
         xformers_package = os.environ.get('XFORMERS_PACKAGE', 'none')
-    elif allow_ipex and args.use_ipex and shutil.which('sycl-ls') is not None:
+    elif allow_ipex and (args.use_ipex or shutil.which('sycl-ls') is not None or os.environ.get('ONEAPI_ROOT') is not None or os.path.exists('/opt/intel/oneapi')):
+        args.use_ipex = True # pylint: disable=attribute-defined-outside-init
         log.info('Intel OneAPI Toolkit detected')
-        torch_command = os.environ.get('TORCH_COMMAND', 'torch==1.13.0a0 torchvision==0.14.1a0 intel_extension_for_pytorch==1.13.120+xpu -f https://developer.intel.com/ipex-whl-stable-xpu')
-        xformers_package = os.environ.get('XFORMERS_PACKAGE', 'none')
+        if shutil.which('sycl-ls') is None:
+            log.error('Intel OneAPI Toolkit is not activated! Start the WebUI with --use-ipex or activate OneAPI manually')
+        os.environ.setdefault('NEOReadDebugKeys', '1')
+        os.environ.setdefault('ClDeviceGlobalMemSizeAvailablePercent', '100')
+        torch_command = os.environ.get('TORCH_COMMAND', 'torch==1.13.0a0+git6c9b55e torchvision==0.14.1a0 intel_extension_for_pytorch==1.13.120+xpu -f https://developer.intel.com/ipex-whl-stable-xpu')
     else:
         machine = platform.machine()
         if sys.platform == 'darwin':
@@ -306,17 +325,13 @@ def check_torch():
         elif allow_directml and args.use_directml and ('arm' not in machine and 'aarch' not in machine):
             log.info('Using DirectML Backend')
             torch_command = os.environ.get('TORCH_COMMAND', 'torch-directml')
-            xformers_package = os.environ.get('XFORMERS_PACKAGE', 'none')
             if 'torch' in torch_command and not args.version:
                 install(torch_command, 'torch torchvision')
         else:
             log.info('Using CPU-only Torch')
             torch_command = os.environ.get('TORCH_COMMAND', 'torch torchvision')
-            xformers_package = os.environ.get('XFORMERS_PACKAGE', 'none')
     if 'torch' in torch_command and not args.version:
         install(torch_command, 'torch torchvision')
-    if args.skip_torch:
-        log.info('Skipping Torch tests')
     else:
         try:
             import torch
@@ -324,7 +339,8 @@ def check_torch():
             if args.use_ipex and allow_ipex:
                 import intel_extension_for_pytorch as ipex # pylint: disable=import-error, unused-import
                 log.info(f'Torch backend: Intel IPEX {ipex.__version__}')
-                log.info(f'{os.popen("icpx --version").read().rstrip()}')
+                if shutil.which('icpx') is not None:
+                    log.info(f'{os.popen("icpx --version").read().rstrip()}')
                 for device in range(torch.xpu.device_count()):
                     log.info(f'Torch detected GPU: {torch.xpu.get_device_name(device)} VRAM {round(torch.xpu.get_device_properties(device).total_memory / 1024 / 1024)} Compute Units {torch.xpu.get_device_properties(device).max_compute_units}')
             elif torch.cuda.is_available() and (allow_cuda or allow_rocm):
@@ -402,7 +418,10 @@ def install_packages():
     # install(openclip_package, 'open-clip-torch')
     clip_package = os.environ.get('CLIP_PACKAGE', "git+https://github.com/openai/CLIP.git")
     install(clip_package, 'clip')
+    invisiblewatermark_package = os.environ.get('INVISIBLEWATERMARK_PACKAGE', "git+https://github.com/patrickvonplaten/invisible-watermark.git@remove_onnxruntime_depedency")
+    install(invisiblewatermark_package, 'invisible-watermark')
     install('onnxruntime==1.15.1', 'onnxruntime', ignore=True)
+    install('pi-heif', 'pi_heif', ignore=True)
     if args.profile:
         print_profile(pr, 'Packages')
 
@@ -414,7 +433,7 @@ def install_repositories():
         pr.enable()
     def d(name):
         return os.path.join(os.path.dirname(__file__), 'repositories', name)
-    log.info('Installing repositories')
+    log.info('Verifying repositories')
     os.makedirs(os.path.join(os.path.dirname(__file__), 'repositories'), exist_ok=True)
     stable_diffusion_repo = os.environ.get('STABLE_DIFFUSION_REPO', "https://github.com/Stability-AI/stablediffusion.git")
     # stable_diffusion_commit = os.environ.get('STABLE_DIFFUSION_COMMIT_HASH', "cf1d67a6fd5ea1aa600c4df58e5b47da45f6bdbf")
@@ -526,9 +545,9 @@ def install_submodules():
     if args.profile:
         pr = cProfile.Profile()
         pr.enable()
-    log.info('Installing submodules')
+    log.info('Verifying submodules')
     txt = git('submodule')
-    log.debug(f'Submodules list: {txt}')
+    # log.debug(f'Submodules list: {txt}')
     if 'no submodule mapping found' in txt:
         log.warning('Attempting repository recover')
         git('add .')
@@ -540,15 +559,17 @@ def install_submodules():
         txt = git('submodule')
         log.info('Continuing setup')
     git('submodule --quiet update --init --recursive')
-    if args.upgrade:
-        log.info('Updating submodules')
-        submodules = txt.splitlines()
-        for submodule in submodules:
-            try:
-                name = submodule.split()[1].strip()
+    git('submodule --quiet sync --recursive')
+    submodules = txt.splitlines()
+    for submodule in submodules:
+        try:
+            name = submodule.split()[1].strip()
+            if args.upgrade:
                 update(name)
-            except Exception:
-                log.error(f'Error updating submodule: {submodule}')
+            else:
+                branch(name)
+        except Exception:
+            log.error(f'Error updating submodule: {submodule}')
     if args.profile:
         print_profile(pr, 'Submodule')
 
@@ -633,11 +654,13 @@ def check_version(offline=False, reset=True): # pylint: disable=unused-argument
             sys.exit(1)
     ver = git('log -1 --pretty=format:"%h %ad"')
     log.info(f'Version: {ver}')
-    if args.quick or args.version or args.skip_git:
+    if args.version or args.skip_git:
         return
     commit = git('rev-parse HEAD')
     global git_commit # pylint: disable=global-statement
     git_commit = commit[:7]
+    if args.quick:
+        return
     try:
         import requests
     except ImportError:
@@ -653,7 +676,7 @@ def check_version(offline=False, reset=True): # pylint: disable=unused-argument
                 try:
                     git('add .')
                     git('stash')
-                    update('.')
+                    update('.', current_branch=True)
                     # git('git stash pop')
                     ver = git('log -1 --pretty=format:"%h %ad"')
                     log.info(f'Upgraded to version: {ver}')
@@ -675,7 +698,6 @@ def update_wiki():
         log.info('Updating Wiki')
         try:
             update(os.path.join(os.path.dirname(__file__), "wiki"))
-            update(os.path.join(os.path.dirname(__file__), "wiki", "origin-wiki"))
         except Exception:
             log.error('Error updating wiki')
 
@@ -782,4 +804,7 @@ def read_options():
     global opts # pylint: disable=global-statement
     if os.path.isfile(args.config):
         with open(args.config, "r", encoding="utf8") as file:
-            opts = json.load(file)
+            try:
+                opts = json.load(file)
+            except Exception as e:
+                log.error(f'Error reading options file: {file} {e}')

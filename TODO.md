@@ -2,21 +2,42 @@
 
 ## Issues
 
-Stuff to be fixed...
+Stuff to be fixed, in no particular order...
 
+- SD-XL VAE
+- SD-XL Lora
+- SD-XL Sketch/Inpaint
+- Kandinsky 2.2 (2.1 is working)
+- Misterious Extensions auto-enabling
+- Misterious Extra network corruptions
+- Save interim image before refiner
 
 ## Features
 
-Stuff to be added...
+Stuff to be added, in no particular order...
 
 - Update `Wiki`
 - Create new `GitHub` hooks/actions for CI/CD  
 - Import core repos
 - Update `train.py` to use `interrogator`
 - Update `train.py` to use `rembg`
-- Create new train UI
-- Create new Models UI
-- Intelligent preview mode
+- Create new **Lora** train UI
+- Docker PR
+- Port `p.all_hr_prompts`
+- Image watermark using `image-watermark`
+- Image phash and hdash using `imagehash`
+- Model merge using `git-rebasin`
+- Additional upscalers
+- XYZ grid upscalers
+- New image browser
+- Update `gradio`
+- Rename repo: **automatic** -> **sdnext**
+- New icons
+- Enable refiner workflow for `ldm` backend
+- Improve `lyco` logging
+- Cache models when switching backends
+- Style editor
+- Built-in motd-style notifications
 
 ## Investigate
 
@@ -26,7 +47,8 @@ Stuff to be investigated...
 
 Pick & merge PRs from main repo...
 
-- list: <https://github.com/AUTOMATIC1111/stable-diffusion-webui/compare/89f9faa...baf6946>
+- up-to-date with: df004be
+- current todo list: <https://github.com/AUTOMATIC1111/stable-diffusion-webui/compare/df004be...394ffa7>
 
 ## Integration
 
@@ -41,21 +63,10 @@ Tech that can be integrated as part of the core workflow...
 - [DataComp CLiP](https://github.com/mlfoundations/open_clip/blob/main/docs/datacomp_models.md)
 - [ClipSeg](https://github.com/timojl/clipseg)
 - [DragGAN](https://github.com/XingangPan/DragGAN)
+- [LamaCleaner]([Title](https://github.com/Sanster/lama-cleaner))
 - `TensorRT`
 
 ## Random
 
 - Bunch of stuff: <https://pharmapsychotic.com/tools.html>
 - <https://towardsdatascience.com/mastering-memoization-in-python-dcdd8b435189>
-- shared.info
-- docker
-- port `p.all_hr_prompts`
-- test `lyco_patch_lora`
-- fix `lyco` logging
-- string template to exif keywords
-- image watermark
-- image `imagehash` phash and hdash
-- custom exif tags
-- replace lightbox with iv-viewer
-- git-rebasin
-- additional upscalers

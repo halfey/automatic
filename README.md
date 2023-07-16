@@ -1,16 +1,42 @@
-[![](https://img.shields.io/static/v1?label=Sponsor&message=%E2%9D%A4&logo=GitHub&color=%23fe8e86)](https://github.com/sponsors/vladmandic)
-![Last Commit](https://img.shields.io/github/last-commit/vladmandic/automatic?style=flat-square&svg=true)
-![License](https://img.shields.io/github/license/vladmandic/automatic?style=flat-square&svg=true)
-![GitHub Status Checks](https://img.shields.io/github/checks-status/vladmandic/automatic/main?style=flat-square&svg=true)
-![Discord](https://img.shields.io/discord/1101998836328697867)
-
+<div align="center">
+  
 # SD.Next
 
-**Stable Diffusion implementation with modern UI and advanced features**
+**Stable Diffusion implementation with advanced features**
 
-This project started as a form from [Automatic1111 WebUI](https://github.com/AUTOMATIC1111/stable-diffusion-webui/) and it grew siginificantly since then, but although it diverged significanly, any substantial features to original work is ported to this repository as well
+<br>  
 
-Individual features are not listed here, instead check [Changelog](CHANGELOG.md) for full list of changes
+[![](https://img.shields.io/static/v1?label=Sponsor&message=%E2%9D%A4&logo=GitHub&color=%23fe8e86)](https://github.com/sponsors/vladmandic)
+![Last Commit](https://img.shields.io/github/last-commit/vladmandic/automatic?svg=true)
+![License](https://img.shields.io/github/license/vladmandic/automatic?svg=true)
+![GitHub Status Checks](https://img.shields.io/github/checks-status/vladmandic/automatic/main?svg=true)
+[![Discord](https://img.shields.io/discord/1101998836328697867?logo=Discord&svg=true)](https://discord.gg/VjvR2tabEX)
+
+### [Docs](README.md#docs) | [Discord](https://discord.gg/VjvR2tabEX) | [Changelog](CHANGELOG.md)
+
+</div>
+
+This project started as a fork from [Automatic1111 WebUI](https://github.com/AUTOMATIC1111/stable-diffusion-webui/) and it grew significantly since then, but although it diverged considerably, any substantial features to original work is ported to this repository as well.
+
+## Top-10 Differentiators
+
+All Individual features are not listed here, instead check [Changelog](CHANGELOG.md) for full list of changes.
+
+- Optimized backend with latest **torch** developments  
+  Including built-in support for `torch.compile`  
+- Support for `diffusers` as well as standard `ldm` backend  
+  Support for diffusers includes multiple models other than standard **Stable Diffusion**  
+  such as **SD-XL**, **Kandinsky**, **DeepFloyd IF** (and many more in the near future)  
+- Fully multiplatform with platform specific autodetection and tuning performed on install  
+- Improved prompt parser  
+- Enhanced Lora/Locon/Lyco code supporting latest trends in training  
+- Built-in queue management  
+- Advanced metadata caching and handling to speed up operations  
+- Enterprise level logging and hardened API  
+- Modern localization and hints engine  
+- Broad compatibility with extisting extensions ecosystem and new extensions manager  
+- Built in installer with automatic updates and dependency management  
+- Modernized UI (still based on Gradio) with theme support  
 
 ## Platform support
 
@@ -32,12 +58,22 @@ Individual features are not listed here, instead check [Changelog](CHANGELOG.md)
   `webui.bat` or `webui.sh`:  
     - Platform specific wrapper scripts For Windows, Linux and OSX  
     - Starts `sdnext.py` in a Python virtual environment (`venv`)  
-    - Uses `install.py` to handle all actual requirements and dependencies  
-    - *Note*: Server can run without virtual environment, but it is recommended to use it to avoid library version conflicts with other applications  
+    - Uses `install.py` to handle all actual requirements and dependencies
 
-*Note*: **nVidia/CUDA** and **AMD/ROCm** are auto-detected is present and available, but for any other use case specify required parameter explicitly or wrong packages may be installed as installer will assume CPU-only environment
 
-Full startup sequence is logged in `sdnext.log`, so if you encounter any issues, please check it first  
+### Common Problems
+
+- [Common Installation Errors](https://github.com/vladmandic/automatic/discussions/1627)  
+- [Q&A Discussions](https://github.com/vladmandic/automatic/discussions/1011)
+
+### Installation Notes
+
+- Server can run without virtual environment,  
+  but it is recommended to use it to avoid library version conflicts with other applications  
+- **nVidia/CUDA** and **AMD/ROCm** are auto-detected is present and available,  
+   but for any other use case specify required parameter explicitly or wrong packages may be installed  
+  as installer will assume CPU-only environment.
+- Full startup sequence is logged in `sdnext.log`, so if you encounter any issues, please check it first.
 
 Below is partial list of all available parameters, run `webui --help` for the full list:
 
@@ -61,17 +97,32 @@ Below is partial list of all available parameters, run `webui --help` for the fu
 
 ## Notes
 
+### **Extensions**
+
+SD.Next comes with several extensions pre-installed:
+
+- [Dyanmic Thresholding](https://github.com/mcmonkeyprojects/sd-dynamic-thresholding)
+- [ControlNet](https://github.com/Mikubill/sd-webui-controlnet)
+- [Agent Scheduler](https://github.com/ArtVentureX/sd-webui-agent-scheduler)
+- [Multi-Diffusion Tiled Diffusion and VAE](https://github.com/pkuliyi2015/multidiffusion-upscaler-for-automatic1111)
+- [LyCORIS](https://github.com/KohakuBlueleaf/a1111-sd-webui-lycoris)
+- [Image Browser](https://github.com/AlUlkesh/stable-diffusion-webui-images-browser)
+- [CLiP Interrogator](https://github.com/pharmapsychotic/clip-interrogator-ext)
+- [Rembg Background Removal](https://github.com/AUTOMATIC1111/stable-diffusion-webui-rembg)
+
 ### **Collab**
 
 - To avoid having this repo rely just on me, I'd love to have additional maintainers with full admin rights. If you're interested, ping me!  
-- In addition to general cross-platform code, desire is to have a lead for each of the main platforms
-This should be fully cross-platform, but I would really love to have additional contibutors and/or maintainers to join and help lead the efforts on different platforms  
+- In addition to general cross-platform code, desire is to have a lead for each of the main platforms.
+This should be fully cross-platform, but I would really love to have additional contibutors and/or maintainers to join and help lead the efforts on different platforms.
 
 ### **Goals**
 
-The idea behind the fork is to enable latest technologies and advances in text-to-image generation  
-*Sometimes this is not the same as "as simple as possible to use"*  
-If you are looking an amazing simple-to-use Stable Diffusion tool, I'd suggest [InvokeAI](https://invoke-ai.github.io/InvokeAI/) specifically due to its automated installer and ease of use  
+The idea behind the fork is to enable latest technologies and advances in text-to-image generation.
+
+> *Sometimes this is not the same as "as simple as possible to use".*
+
+If you are looking an amazing simple-to-use Stable Diffusion tool, I'd suggest [InvokeAI](https://invoke-ai.github.io/InvokeAI/) specifically due to its automated installer and ease of use.  
 
 General goals:
 
@@ -95,6 +146,7 @@ General goals:
 
 ### **Docs**
 
+- [Wiki](https://github.com/vladmandic/automatic/wiki)
 - [ReadMe](README.md)
 - [ToDo](TODO.md)  
 - [Changelog](CHANGELOG.md)

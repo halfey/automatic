@@ -237,7 +237,7 @@ class Api:
         script_runner = scripts.scripts_txt2img
         if not script_runner.scripts:
             script_runner.initialize_scripts(False)
-            ui.create_ui()
+            ui.create_ui(None)
         if not self.default_script_arg_txt2img:
             self.default_script_arg_txt2img = self.init_default_script_args(script_runner)
         selectable_scripts, selectable_script_idx = self.get_selectable_script(txt2imgreq.script_name, script_runner)
@@ -282,7 +282,7 @@ class Api:
         script_runner = scripts.scripts_img2img
         if not script_runner.scripts:
             script_runner.initialize_scripts(True)
-            ui.create_ui()
+            ui.create_ui(None)
         if not self.default_script_arg_img2img:
             self.default_script_arg_img2img = self.init_default_script_args(script_runner)
         selectable_scripts, selectable_script_idx = self.get_selectable_script(img2imgreq.script_name, script_runner)
@@ -406,17 +406,15 @@ class Api:
 
     def interruptapi(self):
         shared.state.interrupt()
-
         return {}
 
     def unloadapi(self):
-        unload_model_weights()
-
+        unload_model_weights(op='model')
+        unload_model_weights(op='refiner')
         return {}
 
     def reloadapi(self):
         reload_model_weights()
-
         return {}
 
     def skip(self):
@@ -605,23 +603,7 @@ class Api:
             ram = { 'error': f'{err}' }
         try:
             import torch
-            if shared.cmd_opts.use_ipex:
-                system = { 'free': (torch.xpu.get_device_properties(shared.device).total_memory - torch.xpu.memory_allocated()), 'used': torch.xpu.memory_allocated(), 'total': torch.xpu.get_device_properties(shared.device).total_memory }
-                s = dict(torch.xpu.memory_stats())
-                allocated = { 'current': s['allocated_bytes.all.current'], 'peak': s['allocated_bytes.all.peak'] }
-                reserved = { 'current': s['reserved_bytes.all.current'], 'peak': s['reserved_bytes.all.peak'] }
-                active = { 'current': s['active_bytes.all.current'], 'peak': s['active_bytes.all.peak'] }
-                inactive = { 'current': s['inactive_split_bytes.all.current'], 'peak': s['inactive_split_bytes.all.peak'] }
-                warnings = { 'retries': s['num_alloc_retries'], 'oom': s['num_ooms'] }
-                cuda = {
-                    'system': system,
-                    'active': active,
-                    'allocated': allocated,
-                    'reserved': reserved,
-                    'inactive': inactive,
-                    'events': warnings,
-                }
-            elif torch.cuda.is_available():
+            if torch.cuda.is_available():
                 s = torch.cuda.mem_get_info()
                 system = { 'free': s[0], 'used': s[1] - s[0], 'total': s[1] }
                 s = dict(torch.cuda.memory_stats(shared.device))
@@ -650,8 +632,8 @@ class Api:
             "port": shared.cmd_opts.port,
             "keyfile": shared.cmd_opts.tls_keyfile,
             "certfile": shared.cmd_opts.tls_certfile,
-            "loop": "auto",
-            "http": "auto",
+            "loop": "auto", # auto, asyncio, uvloop
+            "http": "auto", # auto, h11, httptools
         }
         from modules.server import UvicornServer
         server = UvicornServer(self.app, **config)

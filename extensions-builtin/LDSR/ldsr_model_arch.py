@@ -12,7 +12,7 @@ import safetensors.torch
 
 from ldm.models.diffusion.ddim import DDIMSampler
 from ldm.util import instantiate_from_config, ismap
-from modules import shared, sd_hijack
+from modules import devices, shared, sd_hijack
 
 cached_ldsr_model: torch.nn.Module = None
 
@@ -23,10 +23,10 @@ class LDSR:
         global cached_ldsr_model
 
         if shared.opts.ldsr_cached and cached_ldsr_model is not None:
-            print("Loading model from cache")
+            shared.log.info("LDSR Loading model from cache")
             model: torch.nn.Module = cached_ldsr_model
         else:
-            print(f"Loading model from {self.modelPath}")
+            shared.log.info(f"LDSR Loading model from {self.modelPath}")
             _, extension = os.path.splitext(self.modelPath)
             if extension.lower() == ".safetensors":
                 pl_sd = safetensors.torch.load_file(self.modelPath, device="cpu")
@@ -111,10 +111,7 @@ class LDSR:
         eta = 1.0
 
         gc.collect()
-        if torch.cuda.is_available:
-            torch.cuda.empty_cache()
-        if shared.cmd_opts.use_ipex:
-            torch.xpu.empty_cache()
+        devices.torch_gc()
 
         im_og = image
         width_og, height_og = im_og.size
@@ -126,11 +123,10 @@ class LDSR:
         height_downsampled_pre = int(np.ceil(hd))
 
         if down_sample_rate != 1:
-            print(
-                f'Downsampling from [{width_og}, {height_og}] to [{width_downsampled_pre}, {height_downsampled_pre}]')
+            shared.log.info(f'LDSR Downsampling from [{width_og}, {height_og}] to [{width_downsampled_pre}, {height_downsampled_pre}]')
             im_og = im_og.resize((width_downsampled_pre, height_downsampled_pre), Image.LANCZOS)
         else:
-            print(f"Down sample rate is 1 from {target_scale} / 4 (Not downsampling)")
+            shared.log.info(f"LDSR Downsample rate is 1 from {target_scale} / 4 (Not downsampling)")
 
         # pad width and height to multiples of 64, pads with the edge values of image to avoid artifacts
         pad_w, pad_h = np.max(((2, 2), np.ceil(np.array(im_og.size) / 64).astype(int)), axis=0) * 64 - im_og.size
@@ -151,8 +147,7 @@ class LDSR:
 
         del model
         gc.collect()
-        if torch.cuda.is_available:
-            torch.cuda.empty_cache()
+        devices.torch_gc()
 
         return a
 
@@ -183,7 +178,7 @@ def convsample_ddim(model, cond, steps, shape, eta=1.0, callback=None, normals_s
     ddim = DDIMSampler(model)
     bs = shape[0]
     shape = shape[1:]
-    print(f"Sampling with eta = {eta}; steps: {steps}")
+    shared.log.info(f"LDSR Sampling with eta = {eta}; steps: {steps}")
     samples, intermediates = ddim.sample(steps, batch_size=bs, shape=shape, conditioning=cond, callback=callback,
                                          normals_sequence=normals_sequence, quantize_x0=quantize_x0, eta=eta,
                                          mask=mask, x0=x0, temperature=temperature, verbose=False,
@@ -206,7 +201,7 @@ def make_convolutional_sample(batch, model, custom_steps=None, eta=1.0, quantize
 
     if custom_shape is not None:
         z = torch.randn(custom_shape)
-        print(f"Generating {custom_shape[0]} samples of shape {custom_shape[1:]}")
+        shared.log.info(f"LDSR Generating {custom_shape[0]} samples of shape {custom_shape[1:]}")
 
     z0 = None
 

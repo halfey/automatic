@@ -4,12 +4,14 @@ import time
 import json
 import datetime
 import urllib.request
+from urllib.parse import urlparse
 from enum import Enum
 import gradio as gr
 import tqdm
 import requests
 from modules import errors, ui_components, shared_items, cmd_args
 from modules.paths_internal import models_path, script_path, data_path, sd_configs_path, sd_default_config, sd_model_file, default_sd_model_file, extensions_dir, extensions_builtin_dir # pylint: disable=W0611
+from modules.dml import directml_hijack_init, directml_override_opts
 import modules.interrogate
 import modules.memmon
 import modules.styles
@@ -37,6 +39,10 @@ hypernetworks = {}
 loaded_hypernetworks = []
 gradio_theme = gr.themes.Base()
 settings_components = None
+pipelines = [
+    'Stable Diffusion', 'Stable Diffusion XL', 'Kandinsky V1', 'Kandinsky V2', 'DeepFloyd IF', 'Shap-E',
+    'Stable Diffusion Img2Img', 'Stable Diffusion XL Img2Img', 'Kandinsky V1 Img2Img', 'Kandinsky V2 Img2Img', 'DeepFloyd IF Img2Img', 'Shap-E Img2Img'
+]
 latent_upscale_default_mode = "Latent"
 latent_upscale_modes = {
     "Latent": {"mode": "bilinear", "antialias": False},
@@ -61,15 +67,20 @@ restricted_opts = {
 ui_reorder_categories = [
     "inpaint",
     "sampler",
-    "checkboxes",
-    "hires_fix",
     "dimensions",
     "cfg",
     "seed",
     "batch",
+    "checkboxes",
+    "second_pass",
     "override_settings",
     "scripts",
 ]
+
+
+def is_url(string):
+    parsed_url = urlparse(string)
+    return all([parsed_url.scheme, parsed_url.netloc])
 
 
 class Backend(Enum):
@@ -183,9 +194,11 @@ class State:
 state = State()
 state.server_start = time.time()
 
+backend = Backend.DIFFUSERS if (cmd_opts.backend is not None) and (cmd_opts.backend.lower() == 'diffusers') else Backend.ORIGINAL # initial since we don't have opts loaded yet
+
 
 class OptionInfo:
-    def __init__(self, default=None, label="", component=None, component_args=None, onchange=None, section=None, refresh=None, comment_before='', comment_after=''):
+    def __init__(self, default=None, label="", component=None, component_args=None, onchange=None, section=None, refresh=None, submit=None, comment_before='', comment_after=''):
         self.default = default
         self.label = label
         self.component = component
@@ -195,6 +208,7 @@ class OptionInfo:
         self.refresh = refresh
         self.comment_before = comment_before # HTML text that will be added after label in UI
         self.comment_after = comment_after # HTML text that will be added before label in UI
+        self.submit = submit
 
     def link(self, label, uri):
         self.comment_before += f"[<a href='{uri}' target='_blank'>{label}</a>]"
@@ -206,6 +220,10 @@ class OptionInfo:
 
     def info(self, info):
         self.comment_after += f"<span class='info'>({info})</span>"
+        return self
+
+    def html(self, info):
+        self.comment_after += f"<span class='info'>{info}</span>"
         return self
 
     def needs_restart(self):
@@ -222,7 +240,6 @@ def options_section(section_identifier, options_dict):
 def list_checkpoint_tiles():
     import modules.sd_models # pylint: disable=W0621
     return modules.sd_models.checkpoint_tiles()
-
 
 default_checkpoint = list_checkpoint_tiles()[0] if len(list_checkpoint_tiles()) > 0 else "model.ckpt"
 
@@ -251,12 +268,17 @@ def list_themes():
     return themes
 
 
-def lora_disable():
+def disable_extensions():
     if opts.lora_disable:
         if 'Lora' not in opts.disabled_extensions:
             opts.data['disabled_extensions'].append('Lora')
     else:
         opts.data['disabled_extensions'] = [x for x in opts.disabled_extensions if x != 'Lora']
+    if backend == Backend.DIFFUSERS:
+        for ext in ['sd-webui-controlnet', 'sd-dynamic-thresholding', 'multidiffusion-upscaler-for-automatic1111', 'a1111-sd-webui-lycoris']:
+            if ext not in opts.disabled_extensions:
+                log.warning(f'Diffusers disabling uncompatible extension: {ext}')
+                opts.data['disabled_extensions'].append(ext)
 
 
 def refresh_themes():
@@ -287,8 +309,10 @@ else: # cuda
     cross_attention_optimization_default ="Scaled-Dot-Product"
 
 options_templates.update(options_section(('sd', "Stable Diffusion"), {
-    "sd_model_checkpoint": OptionInfo(default_checkpoint, "Stable Diffusion checkpoint", gr.Dropdown, lambda: {"choices": list_checkpoint_tiles()}, refresh=refresh_checkpoints),
+    "sd_backend": OptionInfo("original", "Stable Diffusion backend", gr.Radio, lambda: {"choices": ["original", "diffusers"] }),
     "sd_checkpoint_autoload": OptionInfo(True, "Stable Diffusion checkpoint autoload on server start"),
+    "sd_model_checkpoint": OptionInfo(default_checkpoint, "Stable Diffusion checkpoint", gr.Dropdown, lambda: {"choices": list_checkpoint_tiles()}, refresh=refresh_checkpoints),
+    "sd_model_refiner": OptionInfo('None', "Stable Diffusion refiner", gr.Dropdown, lambda: {"choices": ['None'] + list_checkpoint_tiles()}, refresh=refresh_checkpoints),
     "sd_checkpoint_cache": OptionInfo(0, "Number of cached model checkpoints", gr.Slider, {"minimum": 0, "maximum": 10, "step": 1}),
     "sd_vae_checkpoint_cache": OptionInfo(0, "Number of cached VAE checkpoints", gr.Slider, {"minimum": 0, "maximum": 10, "step": 1}),
     "sd_vae": OptionInfo("Automatic", "Select VAE", gr.Dropdown, lambda: {"choices": shared_items.sd_vae_items()}, refresh=shared_items.refresh_vae_list),
@@ -299,7 +323,6 @@ options_templates.update(options_section(('sd', "Stable Diffusion"), {
     "prompt_mean_norm": OptionInfo(True, "Prompt attention mean normalization"),
     "comma_padding_backtrack": OptionInfo(20, "Prompt padding for long prompts", gr.Slider, {"minimum": 0, "maximum": 74, "step": 1 }),
     "sd_disable_ckpt": OptionInfo(False, "Disallow usage of checkpoints in ckpt format"),
-    "sd_backend": OptionInfo("Original", "Stable Diffusion backend (experimental)", gr.Radio, lambda: {"choices": ["Original", "Diffusers"] }),
 }))
 
 options_templates.update(options_section(('optimizations', "Optimizations"), {
@@ -329,10 +352,27 @@ options_templates.update(options_section(('cuda', "Compute Settings"), {
     "cuda_allow_tf32": OptionInfo(True, "Allow TF32 math ops"),
     "cuda_allow_tf16_reduced": OptionInfo(True, "Allow TF16 reduced precision math ops"),
     "cuda_compile": OptionInfo(False, "Enable model compile (experimental)"),
-    "cuda_compile_mode": OptionInfo("none", "Model compile mode (experimental)", gr.Radio, lambda: {"choices": ['none', 'inductor', 'cudagraphs', 'aot_ts_nvfuser', 'hidet', 'ipex']}),
+    "cuda_compile_mode": OptionInfo("none", "Model compile mode (experimental)", gr.Radio, lambda: {"choices": ['none', 'inductor', 'reduce-overhead', 'cudagraphs', 'aot_ts_nvfuser', 'hidet', 'ipex']}),
+    "cuda_compile_fullgraph": OptionInfo(False, "Model compile fullgraph"),
     "cuda_compile_verbose": OptionInfo(False, "Model compile verbose mode"),
     "cuda_compile_errors": OptionInfo(True, "Model compile suppress errors"),
-    "disable_gc": OptionInfo(False, "Disable Torch memory garbage collection"),
+    "disable_gc": OptionInfo(True, "Disable Torch memory garbage collection"),
+}))
+
+options_templates.update(options_section(('diffusers', "Diffusers Settings"), {
+    "diffusers_allow_safetensors": OptionInfo(True, 'Diffusers allow loading from safetensors files'),
+    "diffusers_pipeline": OptionInfo(pipelines[0], 'Select diffuser pipeline when loading from safetensors', gr.Dropdown, lambda: {"choices": pipelines}),
+    "diffusers_move_base": OptionInfo(False, "Move base model to CPU when using refiner"),
+    "diffusers_move_refiner": OptionInfo(True, "Move refiner model to CPU when not in use"),
+    "diffusers_extract_ema": OptionInfo(True, "Use model EMA weights when possible"),
+    "diffusers_generator_device": OptionInfo("default", "Generator device", gr.Radio, lambda: {"choices": ["default", "cpu"]}),
+    "diffusers_seq_cpu_offload": OptionInfo(False, "Enable sequential CPU offload"),
+    "diffusers_model_cpu_offload": OptionInfo(False, "Enable model CPU offload"),
+    "diffusers_vae_slicing": OptionInfo(False, "Enable VAE slicing"),
+    "diffusers_vae_tiling": OptionInfo(False, "Enable VAE tiling"),
+    "diffusers_attention_slicing": OptionInfo(False, "Enable attention slicing"),
+    # "diffusers_force_zeros": OptionInfo(False, "Force zeros for prompts when empty"),
+    # "diffusers_aesthetics_score": OptionInfo(6.0, "Require aesthetic score", gr.Slider, {"minimum": 0, "maximum": 10, "step": 0.1}),
 }))
 
 options_templates.update(options_section(('system-paths', "System Paths"), {
@@ -401,7 +441,7 @@ options_templates.update(options_section(('image-processing', "Image Processing"
 }))
 
 
-options_templates.update(options_section(('saving-paths', "Output Paths"), {
+options_templates.update(options_section(('saving-paths', "Image Paths"), {
     "outdir_samples": OptionInfo("", "Output directory for images", component_args=hide_dirs),
     "outdir_txt2img_samples": OptionInfo("outputs/text", 'Output directory for txt2img images', component_args=hide_dirs),
     "outdir_img2img_samples": OptionInfo("outputs/image", 'Output directory for img2img images', component_args=hide_dirs),
@@ -432,7 +472,6 @@ options_templates.update(options_section(('ui', "User Interface"), {
     "ui_tab_reorder": OptionInfo("From Text, From Image, Process Image", "UI tabs order"),
     "ui_scripts_reorder": OptionInfo("Enable Dynamic Thresholding, ControlNet", "UI scripts order"),
     "ui_reorder": OptionInfo(", ".join(ui_reorder_categories), "txt2img/img2img UI item order"),
-    "ui_extra_networks_tab_reorder": OptionInfo("Checkpoints, Lora, LyCORIS, Textual Inversion, Hypernetworks", "Extra networks tab order"),
 }))
 
 options_templates.update(options_section(('live-preview', "Live Previews"), {
@@ -444,30 +483,41 @@ options_templates.update(options_section(('live-preview', "Live Previews"), {
     "show_progress_every_n_steps": OptionInfo(1, "Live preview display period", gr.Slider, {"minimum": -1, "maximum": 32, "step": 1}),
     "show_progress_type": OptionInfo("Approximate NN", "Live preview method", gr.Radio, {"choices": ["Full VAE", "Approximate NN", "Approximate simple", "TAESD"]}),
     "live_preview_content": OptionInfo("Combined", "Live preview subject", gr.Radio, {"choices": ["Combined", "Prompt", "Negative prompt"]}),
-    "live_preview_refresh_period": OptionInfo(250, "Progressbar/preview update period, in milliseconds", gr.Slider, {"minimum": 0, "maximum": 5000, "step": 25}),
+    "live_preview_refresh_period": OptionInfo(500, "Progressbar/preview update period, in milliseconds", gr.Slider, {"minimum": 0, "maximum": 5000, "step": 25}),
     "logmonitor_show": OptionInfo(True, "Show log view"),
     "logmonitor_refresh_period": OptionInfo(5000, "Log view update period, in milliseconds", gr.Slider, {"minimum": 0, "maximum": 30000, "step": 25}),
 }))
 
 options_templates.update(options_section(('sampler-params', "Sampler Settings"), {
-    "show_samplers": OptionInfo(["Euler a", "UniPC", "DDIM", "DPM++ 2M SDE", "DPM++ 2M SDE Karras", "DPM2 Karras", "DPM++ 2M Karras"], "Show samplers in user interface", gr.CheckboxGroup, lambda: {"choices": [x.name for x in list_samplers() if x.name != "PLMS"]}),
+    "show_samplers": OptionInfo(["Euler a", "UniPC", "DEIS", "DDIM", "DPM 1S", "DPM 2M", "DPM++ 2M SDE", "DPM++ 2M SDE Karras", "DPM2 Karras", "DPM++ 2M Karras"], "Show samplers in user interface", gr.CheckboxGroup, lambda: {"choices": [x.name for x in list_samplers() if x.name != "PLMS"]}),
     "fallback_sampler": OptionInfo("Euler a", "Secondary sampler", gr.Dropdown, lambda: {"choices": ["None"] + [x.name for x in list_samplers()]}),
-    "force_latent_sampler": OptionInfo("None", "Force latent upscaler sampler", gr.Dropdown, lambda: {"choices": ["None"] + [x.name for x in list_samplers()]}),
+    # "force_latent_sampler": OptionInfo("None", "Force latent upscaler sampler", gr.Dropdown, lambda: {"choices": ["None"] + [x.name for x in list_samplers()]}),
+    'uni_pc_variant': OptionInfo("bh1", "UniPC variant", gr.Radio, {"choices": ["bh1", "bh2", "vary_coeff"]}),
+    'uni_pc_skip_type': OptionInfo("time_uniform", "UniPC skip type", gr.Radio, {"choices": ["time_uniform", "time_quadratic", "logSNR"]}),
+    'eta_noise_seed_delta': OptionInfo(0, "Noise seed delta (eta)", gr.Number, {"precision": 0}),
+    "eta_ddim": OptionInfo(0.0, "Noise multiplier for DDIM (eta)", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}),
+    "schedulers_solver_order": OptionInfo(2, "Samplers solver order where applicable", gr.Slider, {"minimum": 1, "maximum": 5, "step": 1}),
+
+    "schedulers_sep_diffusers": OptionInfo("<h2>Diffusers specific config</h2>", "", gr.HTML),
+    "schedulers_prediction_type": OptionInfo("default", "Samplers override model prediction type", gr.Radio, lambda: {"choices": ['default', 'epsilon', 'sample', 'v-prediction']}),
+    "schedulers_beta_schedule": OptionInfo("default", "Samplers override beta schedule", gr.Radio, lambda: {"choices": ['default', 'linear', 'scaled_linear', 'squaredcos_cap_v2']}),
+    "schedulers_use_karras": OptionInfo(True, "Samplers should use Karras sigmas where applicable"),
+    "schedulers_use_loworder": OptionInfo(True, "Samplers should use use lower-order solvers in the final steps where applicable"),
+    "schedulers_use_thresholding": OptionInfo(False, "Samplers should use dynamic thresholding where applicable"),
+    "schedulers_dpm_solver": OptionInfo("sde-dpmsolver++", "Samplers DPM solver algorithm", gr.Radio, lambda: {"choices": ['dpmsolver', 'dpmsolver++', 'sde-dpmsolver++']}),
+
+    "schedulers_sep_kdiffusers": OptionInfo("<h2>K-Diffusion specific config</h2>", "", gr.HTML),
     "always_batch_cond_uncond": OptionInfo(False, "Disable conditional batching enabled on low memory systems"),
     "enable_quantization": OptionInfo(True, "Enable samplers quantization for sharper and cleaner results"),
     "eta_ancestral": OptionInfo(1.0, "Noise multiplier for ancestral samplers (eta)", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}),
-    "eta_ddim": OptionInfo(0.0, "Noise multiplier for DDIM (eta)", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}),
-    "ddim_discretize": OptionInfo('uniform', "DDIM discretize img2img", gr.Radio, {"choices": ['uniform', 'quad']}),
     's_churn': OptionInfo(0.0, "sigma churn", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}),
     's_min_uncond': OptionInfo(0, "sigma negative guidance minimum ", gr.Slider, {"minimum": 0.0, "maximum": 4.0, "step": 0.01}),
     's_tmin':  OptionInfo(0.0, "sigma tmin",  gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}),
     's_noise': OptionInfo(1.0, "sigma noise", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}),
-    'eta_noise_seed_delta': OptionInfo(0, "Noise seed delta (eta)", gr.Number, {"precision": 0}),
     'always_discard_next_to_last_sigma': OptionInfo(False, "Always discard next-to-last sigma"),
-    'uni_pc_variant': OptionInfo("bh1", "UniPC variant", gr.Radio, {"choices": ["bh1", "bh2", "vary_coeff"]}),
-    'uni_pc_skip_type': OptionInfo("time_uniform", "UniPC skip type", gr.Radio, {"choices": ["time_uniform", "time_quadratic", "logSNR"]}),
-    'uni_pc_order': OptionInfo(3, "UniPC order (must be < sampling steps)", gr.Slider, {"minimum": 1, "maximum": 10, "step": 1}),
-    'uni_pc_lower_order_final': OptionInfo(True, "UniPC lower order final"),
+
+    "schedulers_sep_compvis": OptionInfo("<h2>CompVis specific config</h2>", "", gr.HTML),
+    "ddim_discretize": OptionInfo('uniform', "DDIM discretize img2img", gr.Radio, {"choices": ['uniform', 'quad']}),
 }))
 
 options_templates.update(options_section(('postprocessing', "Postprocessing"), {
@@ -521,13 +571,17 @@ options_templates.update(options_section(('upscaling', "Upscaling"), {
 }))
 
 options_templates.update(options_section(('extra_networks', "Extra Networks"), {
-    "extra_networks_card_cover": OptionInfo("inline", "UI position", gr.Radio, lambda: {"choices": ["cover", "inline", "sidebar"]}),
+    "ui_extra_networks_tab_reorder": OptionInfo("Checkpoints, Lora, LyCORIS, Textual Inversion, Hypernetworks", "Extra networks tab order"),
+    "extra_networks_card_cover": OptionInfo("sidebar", "UI position", gr.Radio, lambda: {"choices": ["cover", "inline", "sidebar"]}),
+    "extra_networks_height": OptionInfo(53, "UI height (%)", gr.Slider, {"minimum": 10, "maximum": 100, "step": 1}),
     "extra_networks_sidebar_width": OptionInfo(35, "UI sidebar width (%)", gr.Slider, {"minimum": 10, "maximum": 80, "step": 1}),
+    "extra_networks_card_lazy": OptionInfo(True, "UI card preview lazy loading"),
     "extra_networks_card_size": OptionInfo(200, "UI card size (px)", gr.Slider, {"minimum": 20, "maximum": 2000, "step": 1}),
-    "extra_networks_card_square": OptionInfo(False, "UI disable variable aspect ratio"),
+    "extra_networks_card_square": OptionInfo(True, "UI disable variable aspect ratio"),
     "extra_networks_card_fit": OptionInfo("cover", "UI image contain method", gr.Radio, lambda: {"choices": ["contain", "cover", "fill"]}),
+    "extra_network_skip_indexing": OptionInfo(False, "Do not automatically build extra network pages", gr.Checkbox),
     "lyco_patch_lora": OptionInfo(False, "Use LyCoris handler for all Lora types", gr.Checkbox),
-    "lora_disable": OptionInfo(False, "Disable built-in Lora handler", gr.Checkbox, { "visible": True }, onchange=lora_disable),
+    "lora_disable": OptionInfo(False, "Disable built-in Lora handler", gr.Checkbox, { "visible": True }, onchange=disable_extensions),
     "lora_functional": OptionInfo(False, "Use Kohya method for handling multiple Loras", gr.Checkbox),
     "extra_networks_add_text_separator": OptionInfo(" ", "Extra text to add before <...> when adding extra network to prompt", gr.Text, { "visible": False }),
     "extra_networks_default_multiplier": OptionInfo(1.0, "Multiplier for extra networks", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}),
@@ -585,7 +639,7 @@ class Options:
             try:
                 self.data_labels[key].onchange()
             except Exception as e:
-                errors.display(e, f"changing setting {key} to {value}")
+                log.error(f'Error in onchange callback: {key} {value} {e}')
                 setattr(self, key, oldval)
                 return False
         return True
@@ -682,24 +736,27 @@ opts = Options()
 config_filename = cmd_opts.config
 opts.load(config_filename)
 cmd_opts = cmd_args.compatibility_args(opts, cmd_opts)
-if cmd_opts.backend == 'diffusers':
-    log.info('Overriding backend to Diffusers')
-    opts.data['sd_backend'] = 'Diffusers'
-if cmd_opts.backend == 'original':
-    log.info('Overriding backend to Diffusers')
-    opts.data['sd_backend'] = 'Original'
-backend = Backend.DIFFUSERS if opts.sd_backend == 'Diffusers' else Backend.ORIGINAL
+if cmd_opts.backend is None:
+    backend = Backend.DIFFUSERS if opts.data.get('sd_backend', 'original') == 'diffusers' else Backend.ORIGINAL
+else:
+    backend = Backend.DIFFUSERS if cmd_opts.backend.lower() == 'diffusers' else Backend.ORIGINAL
+opts.data['sd_backend'] = 'diffusers' if backend == Backend.DIFFUSERS else 'original'
+opts.data['uni_pc_lower_order_final'] = opts.schedulers_use_loworder
+opts.data['uni_pc_order'] = opts.schedulers_solver_order
+log.info(f'Pipeline: {backend}')
+
 
 prompt_styles = modules.styles.StyleDatabase(opts.styles_dir)
 cmd_opts.disable_extension_access = (cmd_opts.share or cmd_opts.listen or (cmd_opts.server_name or False)) and not cmd_opts.insecure
 devices.device, devices.device_interrogate, devices.device_gfpgan, devices.device_esrgan, devices.device_codeformer = (devices.cpu if any(y in cmd_opts.use_cpu for y in [x, 'all']) else devices.get_optimal_device() for x in ['sd', 'interrogate', 'gfpgan', 'esrgan', 'codeformer'])
 device = devices.device
 batch_cond_uncond = opts.always_batch_cond_uncond or not (cmd_opts.lowvram or cmd_opts.medvram)
-parallel_processing_allowed = not cmd_opts.lowvram and not cmd_opts.medvram
+parallel_processing_allowed = not cmd_opts.lowvram
 mem_mon = modules.memmon.MemUsageMonitor("MemMon", device, opts)
 mem_mon.start()
-if device.type == 'privateuseone':
-    import modules.dml # pylint: disable=ungrouped-imports
+if devices.backend == "directml":
+    directml_hijack_init()
+    directml_override_opts()
 
 
 def reload_gradio_theme(theme_name=None):
@@ -853,14 +910,10 @@ def get_version():
     return version
 
 
-class Shared(sys.modules[__name__].__class__):
-    # this class is here to provide sd_model field as a property, so that it can be created and loaded on demand rather than at program startup.
-    sd_model_val = None
-
+class Shared(sys.modules[__name__].__class__): # this class is here to provide sd_model field as a property, so that it can be created and loaded on demand rather than at program startup.
     @property
     def sd_model(self):
         import modules.sd_models # pylint: disable=W0621
-        # return modules.sd_models.model_data.sd_model
         return modules.sd_models.model_data.get_sd_model()
 
     @sd_model.setter
@@ -868,6 +921,21 @@ class Shared(sys.modules[__name__].__class__):
         import modules.sd_models # pylint: disable=W0621
         modules.sd_models.model_data.set_sd_model(value)
 
-# sd_model: LatentDiffusion = None  # this var is here just for IDE's type checking; it cannot be accessed because the class field above will be accessed instead
+    @property
+    def sd_refiner(self):
+        import modules.sd_models # pylint: disable=W0621
+        return modules.sd_models.model_data.get_sd_refiner()
+
+    @sd_refiner.setter
+    def sd_refiner(self, value):
+        import modules.sd_models # pylint: disable=W0621
+        modules.sd_models.model_data.set_sd_refiner(value)
+
+    @property
+    def backend(self):
+        return Backend.ORIGINAL if opts.data['sd_backend'] == 'original' else Backend.DIFFUSERS
+
+
 sd_model = None
+sd_refiner = None
 sys.modules[__name__].__class__ = Shared

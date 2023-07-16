@@ -1,5 +1,103 @@
 # Change Log for SD.Next
 
+## Update for 07/15/2023
+
+- **direct-ml** improvements: faster and less memory usage
+- basic support for one more model: [UniDiffuser](https://github.com/thu-ml/unidiffuser):
+  download using model downloader: `thu-ml/unidiffuser-v1`
+  use DDIM sampler & disable live preview (support for additional samplers and live previews can be added if there is interest)
+- force requirements check on each start  
+  there are too many misbehaving extensions that change system requirements  
+
+## Update for 07/14/2023
+
+Trying to unify settings for both original and diffusers backend without introducing duplicates...
+
+- renamed **hires fix** to **second pass**  
+  as that is what it actually is, name hires fix is misleading to start with  
+- actual **hires fix** and **refiner** are now options inside **second pass** section  
+- obsoleted settings -> sampler -> **force_latent_sampler**  
+  it is now part of **second pass** options and it works the same for both original and diffusers backend  
+  which means you can use different scheduler settings for txt2img and hires if you want  
+- sd-xl refiner will run if its loaded and if second pass is enabled  
+  so you can quickly enable/disable refiner by simply enabling/disabling second pass  
+- you can mix&match **model** and **refiner**  
+  for example, you can generate image using sd 1.5 and still use sd-xl refiner as second pass  
+- reorganized settings -> samplers to show which section refers to which backend  
+- added diffusers **lmsd** sampler  
+
+## Update for 07/13/2023
+
+Another big one, but now improvements to both **diffusers** and **original** backends as well plus ability to dynamically switch between them!
+
+- swich backend between diffusers and original on-the-fly
+  - you can still use `--backend <backend>` and now that only means in which mode app will start,
+    but you can change it anytime in ui settings
+  - for example, you can even do things like generate image using sd-xl,  
+    then switch to original backend and perform inpaint using a different model  
+- diffusers backend:
+  - separate ui settings for refiner pass with sd-xl  
+    you can specify: prompt, negative prompt, steps, denoise start  
+  - fix loading from pure safetensors files  
+    now you can load sd-xl from safetensors file or from huggingface folder format  
+  - fix kandinsky model (2.1 working, 2.2 was just released and will be soon)  
+- original backend:
+  - improvements to vae/unet handling as well as cross-optimization heads  
+    in non-technical terms, this means lower memory usage and higher performance  
+    and you should be able to generate higher resolution images without any other changes
+- other:
+  - major refactoring of the javascript code  
+    includes fixes for text selections and navigation  
+  - system info tab now reports on nvidia driver version as well  
+  - minor fixes in extra-networks  
+  - installer handles origin changes for submodules  
+
+big thanks to @huggingface team for great communication, support and fixing all the reported issues asap!
+
+
+## Update for 07/10/2023
+
+Service release with some fixes and enhancements:
+
+- diffusers:
+  - option to move base and/or refiner model to cpu to free up vram  
+  - model downloader options to specify model variant / revision / mirror  
+  - now you can download `fp16` variant directly for reduced memory footprint  
+  - basic **img2img** workflow (*sketch* and *inpaint* are not supported yet)  
+    note that **sd-xl** img2img workflows are architecturaly different so it will take longer to implement  
+  - updated hints for settings  
+- extra networks:
+  - fix corrupt display on refesh when new extra network type found  
+  - additional ui tweaks  
+  - generate thumbnails from previews only if preview resolution is above 1k
+- image viewer:
+  - fixes for non-chromium browsers and mobile users and add option to download image  
+  - option to download image directly from image viewer
+- general
+  - fix startup issue with incorrect config  
+  - installer should always check requirements on upgrades
+
+## Update for 07/08/2023
+
+This is a massive update which has been baking in a `dev` branch for a while now
+
+- merge experimental diffusers support  
+
+*TL;DR*: Yes, you can run **SD-XL** model in **SD.Next** now  
+For details, see Wiki page: [Diffusers](https://github.com/vladmandic/automatic/wiki/Diffusers)  
+Note this is still experimental, so please follow Wiki  
+Additional enhancements and fixes will be provided over the next few days  
+*Thanks to @huggingface team for making this possible and our internal @team for all the early testing*
+
+Release also contains number of smaller updates:
+
+- add pan & zoom controls (touch and mouse) to image viewer (lightbox)  
+- cache extra networks between tabs  
+  this should result in neat 2x speedup on building extra networks  
+- add settings -> extra networks -> do not automatically build extra network pages  
+  speeds up app start if you have a lot of extra networks and you want to build them manually when needed  
+- extra network ui tweaks  
+
 ## Update for 07/01/2023
 
 Small quality-of-life updates and bugfixes:

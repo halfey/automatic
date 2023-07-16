@@ -20,6 +20,13 @@ from modules import sd_samplers, shared, script_callbacks, errors, paths
 LANCZOS = (Image.Resampling.LANCZOS if hasattr(Image, 'Resampling') else Image.LANCZOS)
 
 
+try:
+    from pi_heif import register_heif_opener
+    register_heif_opener()
+except Exception:
+    pass
+
+
 def check_grid_size(imgs):
     mp = 0
     for img in imgs:
@@ -133,7 +140,7 @@ def draw_grid_annotations(im, width, height, hor_texts, ver_texts, margin=0):
         except Exception:
             return ImageFont.truetype('html/roboto.ttf', fontsize)
 
-    def draw_texts(drawing, draw_x, draw_y, lines, initial_fnt, initial_fontsize):
+    def draw_texts(drawing: ImageDraw, draw_x, draw_y, lines, initial_fnt, initial_fontsize):
         for line in lines:
             fnt = initial_fnt
             fontsize = initial_fontsize
@@ -616,7 +623,11 @@ def read_info_from_image(image):
         items['UserComment'] = geninfo
 
     if "exif" in items:
-        exif = piexif.load(items["exif"])
+        try:
+            exif = piexif.load(items["exif"])
+        except Exception as e:
+            shared.log.error(f'Error loading EXIF data: {e}')
+            exif = {}
         for _key, subkey in exif.items():
             if isinstance(subkey, dict):
                 for key, val in subkey.items():
